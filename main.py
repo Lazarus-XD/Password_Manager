@@ -4,8 +4,6 @@ import cryptography
 import random
 import string
 
-conn = sqlite3.connect("info.db")
-cur = conn.cursor()
 key = None
 
 def storeUser_MasterPass(username):
@@ -16,7 +14,6 @@ def addServiceAndPass(username):
     """Store the randomly generated password in the selected service column"""
     service = input("Enter the service name: ")
     columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
-    print(columns)
 
     if service not in columns:
         cur.execute(f"ALTER TABLE info ADD COLUMN '{service}' TEXT;")
@@ -30,10 +27,7 @@ def addServiceAndPass(username):
     conn.commit()
 
 def generatePass():
-    """
-    Generate a random 25 char password containing lowercase, uppercase, numbers and special chars
-    :return: str
-    """
+    """Generate a random 25 char password containing lowercase, uppercase, numbers and special chars"""
     global key
     password = ""
     randomSource = string.ascii_letters + string.digits + string.punctuation
@@ -52,14 +46,13 @@ def generatePass():
     random.shuffle(passwordList)
     random.shuffle(passwordList)
     password = ''.join(passwordList)
-    f = Fernet(key)
-    token = f.encrypt(password.encode("utf-8"))
-    return token.decode("utf-8")
-
-def createTable():
-    cur.execute("""CREATE TABLE IF NOT EXISTS info
-                    (username TEXT PRIMARY KEY NOT NULL);""")
-    conn.commit()
+    try:
+        print("\nGenerated password:", password)
+        f = Fernet(key)
+        token = f.encrypt(password.encode("utf-8"))
+        return token.decode("utf-8")
+    except:
+        print("Invalid key")
 
 def generateKey(username):
     global key
@@ -74,14 +67,33 @@ def generateKey(username):
 
 def fetchData(username):
     global key
+    passStored = False
     cur.execute(f"SELECT * FROM info WHERE username = '{username}';")
     record = cur.fetchall()
+    columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
     f = Fernet(key)
+    print()
     for row in record:
-        print("username:", row[0], "facebook:", row[1], "youtube:", row[2])
-        print(f.decrypt(row[1].encode("utf-8")).decode("utf-8"))
-        # print(f.decrypt(row[2].encode("utf-8")).decode("utf-8"))
+        if len(row) == 1:
+            print("You have no stored passwords!")
+        for data in range(len(row)-1):
+            try:
+                if type(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8")) == str:
+                    print(columns[data+1], end=": ")
+                    print(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8"))
+                    passStored = True
+            except AttributeError:
+                if not passStored:
+                    print("You have no stored passwords!")
+                continue
+            except cryptography.fernet.InvalidToken:
+                print("Invalid Token")
+                break
 
+def createTable():
+    cur.execute("""CREATE TABLE IF NOT EXISTS info
+                    (username TEXT PRIMARY KEY NOT NULL);""")
+    conn.commit()
 
 def main():
     global key
@@ -100,32 +112,31 @@ def main():
             generateKey(username)
             print("Your info has been stored in the database.")
 
+    if createUser == "n" or record != 0:
+        key = input("Enter your master key: ").encode("utf-8")
+
     while True:
-        if createUser == "n" or record != 0:
-            key = input("Enter your master key: ").encode("utf-8")
-        answer = input("Do you want to add a new service? Enter y or n: ")
-        if answer == "y" or answer == "n":
+        while True:
+            answer = input("""\n1. Do you want to add a new service
+2. Do you want to access your stored passwords
+3. Exit password manager
+Enter your choice (1/2/3): """)
+            if answer == "1" or answer == "2" or answer == "3":
+                break
+
+        if answer == "1":
+            addServiceAndPass(username)
+
+        if answer == "2":
+            fetchData(username)
+
+        if answer == "3":
             break
 
-    if answer == "y":
-        print("key:", key)
-        addServiceAndPass(username)
 
-createTable()
-# print(user1.userKey)
-# print(checkPassword())
-# user1.addGeneratedPass()
-# print(generatePass())
-main()
-# fetchData("Abbu")
-conn.close()
-
-# try:
-#     key = Fernet.generate_key()
-#     f = Fernet(key)
-#     token = f.encrypt(b"my deep dark secret")
-#     key = Fernet.generate_key()
-#     f = Fernet(key)
-#     print(f.decrypt(token))
-# except (cryptography.fernet.InvalidToken):
-#     print("Invalid key")
+if __name__ == "__main__":
+    conn = sqlite3.connect("info.db")
+    cur = conn.cursor()
+    createTable()
+    main()
+    conn.close()
