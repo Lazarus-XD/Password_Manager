@@ -6,8 +6,8 @@ import string
 
 key = None
 
-def storeUser_MasterPass(username):
-    cur.execute(f"INSERT INTO info (username) VALUES ('{username}');")
+def storeUser(username):
+    cur.execute("INSERT INTO info (username) VALUES (?)", (username,))
     conn.commit()
 
 def addServiceAndPass(username):
@@ -23,21 +23,21 @@ def addServiceAndPass(username):
     columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
 
     if service not in columns:
-        cur.execute(f"ALTER TABLE info ADD COLUMN '{service}' TEXT;")
+        cur.execute("ALTER TABLE info ADD COLUMN '{}' TEXT".format(service))
         conn.commit()
 
-    cur.execute(f"SELECT COUNT({service}) FROM info WHERE username = '{username}';")
+    cur.execute("SELECT COUNT({}) FROM info WHERE username = ?".format(service), (username,))
     record = cur.fetchone()[0]
 
     if record == 0 and passInfo == "2":
-        cur.execute(f"UPDATE info SET '{service}' = '{generatePass()}' WHERE username = '{username}';")
+        cur.execute("UPDATE info SET {} = '{}' WHERE username = ?".format(service, generatePass()), (username,))
         conn.commit()
 
     if record == 0 and passInfo == "1":
         password = input("Enter your password: ")
         f = Fernet(key)
         token = f.encrypt(password.encode("utf-8")).decode("utf-8")
-        cur.execute(f"UPDATE info SET '{service}' = '{token}' WHERE username = '{username}';")
+        cur.execute("UPDATE info SET {} = '{}' WHERE username = ?".format(service, token), (username,))
         conn.commit()
 
 def generatePass():
@@ -69,6 +69,7 @@ def generatePass():
         print("Invalid key")
 
 def generateKey(username):
+    """Generate the encryption key and store it in a seperate txt file"""
     global key
     key = Fernet.generate_key()
     with open(username + "(key).txt", "w") as f:
@@ -82,7 +83,7 @@ def generateKey(username):
 def fetchData(username):
     global key
     passStored = printed = False
-    cur.execute(f"SELECT * FROM info WHERE username = '{username}';")
+    cur.execute("SELECT * FROM info WHERE username = ?", (username,))
     record = cur.fetchall()
     columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
     f = Fernet(key)
@@ -97,17 +98,17 @@ def fetchData(username):
                     print(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8"))
                     passStored = True
             except AttributeError:
-                if not passStored and not printed:
-                    print("You have no stored passwords!")
-                    printed = True
                 continue
             except cryptography.fernet.InvalidToken:
                 print("Invalid Token")
                 break
+            if not passStored and not printed:
+                print("You have no stored passwords!")
+                printed = True
 
 def createTable():
     cur.execute("""CREATE TABLE IF NOT EXISTS info
-                    (username TEXT PRIMARY KEY NOT NULL);""")
+                    (username TEXT PRIMARY KEY NOT NULL)""")
     conn.commit()
 
 def main():
@@ -115,7 +116,7 @@ def main():
     createUser = "n"
     while True:
         username = input("Enter your username: ")
-        cur.execute(f"SELECT COUNT(username) FROM info WHERE username = '{username}';")
+        cur.execute("SELECT COUNT(username) FROM info WHERE username = ?", (username,))
         record = cur.fetchone()[0]
         if record == 0:
             while True:
@@ -124,7 +125,7 @@ def main():
                     break
 
             if createUser == "y":
-                storeUser_MasterPass(username)
+                storeUser(username)
                 generateKey(username)
                 print("Your info has been stored in the database.")
                 break
