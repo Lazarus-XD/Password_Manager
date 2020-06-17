@@ -12,19 +12,33 @@ def storeUser_MasterPass(username):
 
 def addServiceAndPass(username):
     """Store the randomly generated password in the selected service column"""
+    global key
     service = input("Enter the service name: ")
+    while True:
+        print("\n1. Manually enter password")
+        print("2. Generate random password")
+        passInfo = input("Enter your choice (1/2): ")
+        if passInfo == "1" or passInfo == "2":
+            break
     columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
 
     if service not in columns:
         cur.execute(f"ALTER TABLE info ADD COLUMN '{service}' TEXT;")
-    conn.commit()
+        conn.commit()
 
     cur.execute(f"SELECT COUNT({service}) FROM info WHERE username = '{username}';")
     record = cur.fetchone()[0]
 
-    if record == 0:
+    if record == 0 and passInfo == "2":
         cur.execute(f"UPDATE info SET '{service}' = '{generatePass()}' WHERE username = '{username}';")
-    conn.commit()
+        conn.commit()
+
+    if record == 0 and passInfo == "1":
+        password = input("Enter your password: ")
+        f = Fernet(key)
+        token = f.encrypt(password.encode("utf-8")).decode("utf-8")
+        cur.execute(f"UPDATE info SET '{service}' = '{token}' WHERE username = '{username}';")
+        conn.commit()
 
 def generatePass():
     """Generate a random 25 char password containing lowercase, uppercase, numbers and special chars"""
@@ -67,7 +81,7 @@ def generateKey(username):
 
 def fetchData(username):
     global key
-    passStored = False
+    passStored = printed = False
     cur.execute(f"SELECT * FROM info WHERE username = '{username}';")
     record = cur.fetchall()
     columns = [i[1] for i in cur.execute("PRAGMA table_info(info)")]
@@ -83,8 +97,9 @@ def fetchData(username):
                     print(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8"))
                     passStored = True
             except AttributeError:
-                if not passStored:
+                if not passStored and not printed:
                     print("You have no stored passwords!")
+                    printed = True
                 continue
             except cryptography.fernet.InvalidToken:
                 print("Invalid Token")
@@ -98,7 +113,7 @@ def createTable():
 def main():
     global key
     createUser = "n"
-    username = input("Enter yout username: ")
+    username = input("Enter your username: ")
     cur.execute(f"SELECT COUNT(username) FROM info WHERE username = '{username}';")
     record = cur.fetchone()[0]
     if record == 0:
@@ -117,10 +132,10 @@ def main():
 
     while True:
         while True:
-            answer = input("""\n1. Do you want to add a new service
-2. Do you want to access your stored passwords
-3. Exit password manager
-Enter your choice (1/2/3): """)
+            print("\n1. Add a new service")
+            print("2. Access your stored passwords")
+            print("3. Exit password manager")
+            answer = input("Enter your choice (1/2/3): ")
             if answer == "1" or answer == "2" or answer == "3":
                 break
 
