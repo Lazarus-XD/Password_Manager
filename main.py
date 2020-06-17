@@ -113,22 +113,25 @@ def createTable():
 def main():
     global key
     createUser = "n"
-    username = input("Enter your username: ")
-    cur.execute(f"SELECT COUNT(username) FROM info WHERE username = '{username}';")
-    record = cur.fetchone()[0]
-    if record == 0:
-        while True:
-            createUser = input("Username does not exist. Do you want to create a new? Enter y or n: ")
-            if createUser == "y" or createUser == "n":
+    while True:
+        username = input("Enter your username: ")
+        cur.execute(f"SELECT COUNT(username) FROM info WHERE username = '{username}';")
+        record = cur.fetchone()[0]
+        if record == 0:
+            while True:
+                createUser = input("Username does not exist. Do you want to create a new? Enter y or n: ")
+                if createUser == "y" or createUser == "n":
+                    break
+
+            if createUser == "y":
+                storeUser_MasterPass(username)
+                generateKey(username)
+                print("Your info has been stored in the database.")
                 break
 
-        if createUser == "y":
-            storeUser_MasterPass(username)
-            generateKey(username)
-            print("Your info has been stored in the database.")
-
-    if createUser == "n" or record != 0:
-        key = input("Enter your master key: ").encode("utf-8")
+        if createUser == "n" and record != 0:
+            key = input("Enter your master key: ").encode("utf-8")
+            break
 
     while True:
         while True:
