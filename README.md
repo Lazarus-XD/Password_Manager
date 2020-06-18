@@ -1,11 +1,14 @@
 # Password_Manager
 A simple password manager that generates random passwords and stores them in a database.
 
-**REQUIRED PACKAGE: cryptography**
+**REQUIRED PACKAGES: cryptography and stdiomask**
 
-To install the package type in command prompt or terminal:
+To install the packages type in command prompt or terminal:
 ```{r, engine='bash', count_lines}
 pip install cryptography
+```
+```{r, engine='bash', count_lines}
+pip install stdiomask
 ```
 
 ## How it works
