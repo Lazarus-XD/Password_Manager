@@ -3,16 +3,14 @@ from cryptography.fernet import Fernet
 import cryptography
 import random
 import string
-
-key = None
+import stdiomask
 
 def storeUser(username):
     cur.execute("INSERT INTO info (username) VALUES (?)", (username,))
     conn.commit()
 
-def addServiceAndPass(username):
+def addServiceAndPass(username, key):
     """Store the randomly generated password in the selected service column"""
-    global key
     service = input("Enter the service name: ")
     while True:
         print("\n1. Manually enter password")
@@ -30,7 +28,7 @@ def addServiceAndPass(username):
     record = cur.fetchone()[0]
 
     if record == 0 and passInfo == "2":
-        cur.execute("UPDATE info SET {} = '{}' WHERE username = ?".format(service, generatePass()), (username,))
+        cur.execute("UPDATE info SET {} = '{}' WHERE username = ?".format(service, generatePass(key)), (username,))
         conn.commit()
 
     if record == 0 and passInfo == "1":
@@ -40,9 +38,8 @@ def addServiceAndPass(username):
         cur.execute("UPDATE info SET {} = '{}' WHERE username = ?".format(service, token), (username,))
         conn.commit()
 
-def generatePass():
+def generatePass(key):
     """Generate a random 25 char password containing lowercase, uppercase, numbers and special chars"""
-    global key
     password = ""
     randomSource = string.ascii_letters + string.digits + string.punctuation
 
@@ -70,8 +67,12 @@ def generatePass():
 
 def generateKey(username):
     """Generate the encryption key and store it in a seperate txt file"""
-    global key
     key = Fernet.generate_key()
+    k = Fernet(key)
+    token = k.encrypt("value".encode("utf-8")).decode("utf-8")
+    cur.execute("UPDATE info SET check_key = '{}' WHERE username = ?".format(token), (username,))
+    conn.commit()
+
     with open(username + "(key).txt", "w") as f:
         f.write("*********************************************************************\n")
         f.write("                 STORE THIS KEY IN A SECURE PLACE!\n")
@@ -80,8 +81,9 @@ def generateKey(username):
         f.write(key.decode("utf-8"))
         f.close()
 
-def fetchData(username):
-    global key
+    return key
+
+def fetchData(username, key):
     passStored = printed = False
     cur.execute("SELECT * FROM info WHERE username = ?", (username,))
     record = cur.fetchall()
@@ -89,13 +91,13 @@ def fetchData(username):
     f = Fernet(key)
     print()
     for row in record:
-        if len(row) == 1:
+        if len(row) == 2:
             print("You have no stored passwords!")
-        for data in range(len(row)-1):
+        for data in range(len(row)-2):
             try:
-                if type(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8")) == str:
-                    print(columns[data+1], end=": ")
-                    print(f.decrypt(row[data+1].encode("utf-8")).decode("utf-8"))
+                if type(f.decrypt(row[data+2].encode("utf-8")).decode("utf-8")) == str:
+                    print(columns[data+2], end=": ")
+                    print(f.decrypt(row[data+2].encode("utf-8")).decode("utf-8"))
                     passStored = True
             except AttributeError:
                 continue
@@ -106,13 +108,25 @@ def fetchData(username):
                 print("You have no stored passwords!")
                 printed = True
 
+def checkPass(username, key):
+    """Checks if the entered master key is correct"""
+    cur.execute("SELECT * FROM info WHERE username = ?", (username,))
+    record = cur.fetchall()
+    try:
+        f = Fernet(key)
+        f.decrypt(record[0][1].encode("utf-8"))
+        return True
+    except:
+        print("\nWrong key! Try again.\n")
+        return False
+
 def createTable():
     cur.execute("""CREATE TABLE IF NOT EXISTS info
-                    (username TEXT PRIMARY KEY NOT NULL)""")
+                    (username TEXT PRIMARY KEY NOT NULL,
+                     check_key TEXT)""")
     conn.commit()
 
 def main():
-    global key
     createUser = "n"
     while True:
         username = input("Enter your username: ")
@@ -126,12 +140,15 @@ def main():
 
             if createUser == "y":
                 storeUser(username)
-                generateKey(username)
+                key = generateKey(username)
                 print("Your info has been stored in the database.")
                 break
 
         if createUser == "n" and record != 0:
-            key = input("Enter your master key: ").encode("utf-8")
+            while True:
+                key = stdiomask.getpass(prompt="Enter your master key: ", mask="*").encode("utf-8")
+                if checkPass(username, key):
+                    break
             break
 
     while True:
@@ -144,10 +161,10 @@ def main():
                 break
 
         if answer == "1":
-            addServiceAndPass(username)
+            addServiceAndPass(username, key)
 
         if answer == "2":
-            fetchData(username)
+            fetchData(username, key)
 
         if answer == "3":
             break
